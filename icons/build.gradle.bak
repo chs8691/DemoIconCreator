@@ -1,0 +1,361 @@
+// Set by task readProperties
+def List<IconSetting> iconSettings = new ArrayList()
+
+ext {
+    // Internal set to true for validate task
+    reportAll = "false"
+}
+
+
+task readProperties {
+    description 'Helper task reads file with icon settings into global list'
+    doLast {
+        iconSettings = getIconSettings()
+    }
+}
+
+task clean(type: Delete) {
+    description 'cleans up build directory'
+    delete 'build/hugo'
+}
+
+task createBuildDir() {
+    description 'Creates build directory structure'
+    dependsOn = ["validate", "clean", "readProperties"]
+    doLast {
+        createAllBuildDirs()
+    }
+}
+
+// Structure for icon setting
+class IconSetting {
+    String icon;
+    String file;
+    String iconType;
+    String module;
+    String flavor;
+}
+
+task generate(dependsOn: 'createBuildDir') {
+    description 'Generates image files into build directory'
+    doLast {
+        runExecs()
+    }
+}
+
+task report(dependsOn: 'readProperties') {
+    description 'Prints all settings to the console'
+    doLast {
+        project.setProperty('reportAll', 'true')
+        printProperties()
+        printIconSettings()
+        reportUnusedSources()
+        validateDestinationPath()
+        validateIconSettings()
+        project.setProperty('reportAll', 'false')
+    }
+}
+
+task deploy(type: Copy, dependsOn: 'generate') {
+    description 'Copies build to Android Studio path'
+    from 'build'
+    into getMyPropertyValue('destinationRoot')
+}
+
+task validate(dependsOn: 'readProperties') {
+    doLast {
+        if (!validateDestinationPath() || !validateIconSettings()) {
+            //Don't execute following tasks
+            generate.enabled = false
+            createBuildDir.enabled = false
+//      throw new InvalidUserDataException('Validation failed. Stop now.')
+        } else
+            println 'All right.'
+    }
+}
+
+///** Depending if error and from script's global setting, writes to
+//*   stout or does nothing.
+//*   The print is independent from gradle logger setting
+//*   @param error true message is an error
+//*/
+def void printMessage(boolean error, String text) {
+    if (error || reportAll)
+        println text
+}
+
+// Returns true, if ok
+def boolean validateDestinationPath() {
+
+    def ret = true
+
+    if (getMyPropertyValue('destinationRoot') == null) {
+        ret = false
+        printMessage true, 'ERR  Missing property destinationRoot in my.properties'
+        return ret
+    }
+
+    File dest = file(getMyPropertyValue('destinationRoot'))
+    if (!dest.exists()) {
+        ret = false
+        printMessage true, 'ERR  Destination path does not exists:' + dest.path + '! Check my.properties destinationRoot=../MyAndroidStudioProject for a correct directory'
+        return ret
+    }
+
+    iconSettings.each { is ->
+        File path = file(dest.path + '/' + is.module + '/src/' + is.flavor)
+
+        if (!path.exists()) {
+            ret = false
+            printMessage true, "ERR  " + is.icon + ": Destination path invalid " + path.path
+        }
+    }
+
+    return ret
+}
+
+/**
+ */
+def String getMyPropertyValue(String key) {
+    def props = getMyProperties()
+    def val = null
+    props.each { actKey, actVal ->
+        if (actKey.equals(key))
+            val = actVal
+    }
+    return val
+}
+
+// Returns true, if ok
+def boolean validateIconSettings() {
+
+    def ret = true
+
+    def File srcDir = file('src')
+    def collection = files { srcDir.listFiles() }
+
+    // Check if source file exists
+    iconSettings.each { setting ->
+        def found = false
+        collection.each { File file ->
+            if (file.getName().equals(setting.file))
+                found = true
+        }
+        if (!found) {
+            ret = false
+            printMessage true, "ERR  " + setting.icon + ": Missing src/" + setting.file
+        }
+        // Check size
+        def exists = false
+        def props = getMyProperties()
+        props.each { key, val ->
+            if (key.equals(setting.iconType))
+                exists = true;
+        }
+
+        //if(!exists)
+        if (getMyPropertyValue(setting.iconType) == null) {
+            ret = false
+            printMessage true, "ERR  " + setting.icon + ": Unknown iconType " + setting.iconType
+        }
+
+
+    }
+    return ret
+
+}
+/** If sizeProperty not defined, size will be set 10 */
+def int getSize(String sizePropertyKey) {
+    def props = getMyProperties()
+    int ret = 10
+    props.each { key, val ->
+        if (key.equals(sizePropertyKey)) {
+            ret = Integer.parseInt(val)
+        }
+    }
+    return ret
+}
+
+/** Search for settings errors and reports them*/
+def reportUnusedSources() {
+
+    File srcDir = file('src')
+    def collection = files { srcDir.listFiles() }
+
+    collection.each { File file ->
+        if (!file.isHidden()) {
+            def used = false
+            iconSettings.each {
+                if (it.file.equals(file.name))
+                    used = true
+            }
+            if (!used)
+                println "INFO unused src/" + file.name
+        }
+    }
+
+}
+
+def deleteUnusedBuildDirs(){
+    def File buildDir = new File("icons/build")
+    List<File> files = Arrays.asList(buildDir.listFiles())
+
+    for(File file: files){
+        iconSettings.each{
+
+        }
+    }
+
+
+    collection = files {buildDir.listFiles()}
+    collection
+
+}
+
+def createAllBuildDirs() {
+    def File buildDir = new File("icons/build")
+
+    if (!buildDir.exists())
+        buildDir.mkdirs()
+
+    //Create subdirectories for every module and flavor and size (very stupid implementation)
+    iconSettings.each {
+        makeDirs(buildDir.getPath(), it, "drawable-mdpi")
+        makeDirs(buildDir.getPath(), it, "drawable-hdpi")
+        makeDirs(buildDir.getPath(), it, "drawable-xhdpi")
+        makeDirs(buildDir.getPath(), it, "drawable-xxhdpi")
+        makeDirs(buildDir.getPath(), it, "drawable-xxxhdpi")
+    }
+
+}
+
+def makeDirs(String root, IconSetting iconSetting, String end) {
+    def File dir = new File(root + "/" + iconSetting.module +
+            "/src/" + iconSetting.flavor +
+            "/res", end)
+    if (!dir.exists())
+        dir.mkdirs()
+//    println "-->>" + dir.path + " " + dir.exists()
+}
+
+
+def runExecs() {
+    iconSettings.each {
+        String icon = it.icon
+        String file = it.file
+        int heightM = getSize(it.iconType)
+        int heightH = heightM * 3 / 2;
+        int heightX = heightM * 2;
+        int heightXX = heightH * 2;
+        int heightXXX = heightX * 2;
+        String module = it.module
+        String flavor = it.flavor
+        String path = "build/" + module + "/src/" + flavor + "/res/"
+
+        runExec(path, "drawable-mdpi", icon, file, heightM)
+        runExec(path, "drawable-hdpi", icon, file, heightH)
+        runExec(path, "drawable-xhdpi", icon, file, heightX)
+        runExec(path, "drawable-xxhdpi", icon, file, heightXX)
+        runExec(path, "drawable-xxxhdpi", icon, file, heightXXX)
+
+
+    }
+}
+
+/** Stupid method to execute Inkscape command line */
+def runExec(String path, String dir, String icon, String file, int height) {
+    exec {
+        executable "inkscape"
+        args "-z",
+                "-e=" + path + "/" + dir + "/" + icon,
+                "-h=" + height,
+                "src/" + file
+    }
+}
+
+def printIconSettings() {
+    println ""
+    println "ICON SETTINGS "
+    println "-----------------------------------------------------------------------------"
+    println "// icon: file, type, module, flavor"
+    iconSettings.each {
+        println it.icon + ": " + it.file + ", " +
+                it.iconType + ", " + it.module + ", " + it.flavor
+    }
+    println "-----------------------------------------------------------------------------"
+}
+
+
+def printProperties() {
+    def props = getMyProperties()
+    println ""
+    println "PROPERTIES"
+    println "-----------------------------------------------------------------------------"
+    props.each { key, val ->
+        println key + ": " + val
+    }
+    println "-----------------------------------------------------------------------------"
+}
+
+def Properties getMyProperties() {
+    def props = new Properties()
+    def ret = new Properties()
+    props.load(new FileInputStream("icons/my.properties"))
+    props.each { key, val ->
+        if (!key.startsWith("//")) {
+            ret.setProperty(key, val)
+        }
+    }
+    return ret
+}
+
+/** Loads icon.properties and returns a List of IconSettings*/
+def List<IconSetting> getIconSettings() {
+
+    def list = new ArrayList<>()
+
+    BufferedReader br = new BufferedReader(new FileReader(new File("icons/icon.properties")))
+    String line
+
+    //There is no do/while in Gradle, so take a for instead
+    for (boolean run = true; run == true;) {
+        line = br.readLine()
+        if (line == null)
+            run = false
+        def bol = run && !line.startsWith("//")
+        if (bol) {
+            list.add(buildItem(line))
+        }
+    }
+
+    //Reduce to command line 
+    //icons must be defines as project property in gradle.properties
+    if (icons != null && !icons.isEmpty()) {
+//      println "args available"
+        List<String> args = new ArrayList(Arrays.asList(icons.split(',')))
+
+        List<IconSetting> isCopy = new ArrayList();
+        isCopy.addAll(list)
+        for (IconSetting is : isCopy) {
+            if (!args.contains(is.icon)) {
+//	  println 'remove ' + is.icon
+                list.remove(is)
+            }
+        }
+
+    }
+    return list
+}
+
+def IconSetting buildItem(String line) {
+    def del = "\\|"
+    def iconSetting = new IconSetting()
+    line = line.replaceAll("\\t", "")
+    iconSetting.icon = line.split(del)[0].trim()
+    iconSetting.file = line.split(del)[1].trim()
+    iconSetting.iconType = line.split(del)[2].trim()
+    iconSetting.module = line.split(del)[3].trim()
+    iconSetting.flavor = line.split(del)[4].trim()
+    return iconSetting
+
+}
