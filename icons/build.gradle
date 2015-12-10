@@ -32,13 +32,15 @@ abstract class Dest {
 /** Constants for icon source path and directories*/
 abstract class Src {
     def static final String SRC = 'src/';
-    def static final String MY_PROPS =  'icons/my.properties';
-    def static final String ICON_PROPS =  'icons/icon.properties';
+    def static final String MY_PROPS =  'my.properties';
+    def static final String ICON_PROPS =  'icon.properties';
+//    def static final String ICON_PROPS =  'icons/icon.properties';
 }
 
 /** Constants for property keys*/
 abstract class Keys {
     def static final String DESTINATION_ROOT = 'destinationRoot';
+    def static final String INKSCAPE_PATH = 'inkscapePath';
 }
 
 
@@ -62,8 +64,8 @@ iconSettings.each {
     task "$taskName" {
         //
         dependsOn 'validate'
-        inputs.property('my',getMyProperties())
         inputs.property('is', is.toString())
+        inputs.property('my', getMyProperties())
         inputs.file(file(Src.SRC + is.file))
 
         outputs.file(file(buildOutputFile(is, Dest.MDPI)))
@@ -327,31 +329,30 @@ def reportUnusedSources() {
 
 }
 
-/** Linux: Stupid method to execute Inkscape command line */
+/** Stupid method to execute Inkscape command line */
 def runExec(String destPath, String srcFile, int height) {
     exec {
         //Dont' show outputs in the terminal
         standardOutput = new ByteArrayOutputStream()
-        executable "inkscape"
+        executable getMyPropertyValue(Keys.INKSCAPE_PATH)
         args "-z",
                 "-e=" + destPath,
                 "-h=" + height,
-                Src.SRC + srcFile
+                "-f=" + Src.SRC + srcFile
     }
 }
-
-/** Windows: Stupid method to execute Inkscape command line */
 //def runExec(String destPath, String srcFile, int height) {
 //    exec {
 //        //Dont' show outputs in the terminal
 //        standardOutput = new ByteArrayOutputStream()
-//        executable "inkscape"
+//        executable getMyPropertyValue(Keys.INKSCAPE_PATH)
 //        args "-z",
-//                "-e=" + destPath,
-//                "-h=" + height,
-//                Src.SRC + srcFile
+//                "--export-png=" + destPath,
+//                "--export-height=" + height,
+//                "--file=" + Src.SRC + srcFile
 //    }
 //}
+
 
 def printIconSettings() {
     println ""
@@ -380,7 +381,9 @@ def printProperties() {
 def Properties getMyProperties() {
     def props = new Properties()
     def ret = new Properties()
-    props.load(new FileInputStream(Src.MY_PROPS))
+
+    String path = new File(projectDir,Src.MY_PROPS).absolutePath
+    props.load(new FileInputStream(path))
     props.each { key, val ->
         if (!key.startsWith("//")) {
             ret.setProperty(key, val)
@@ -394,7 +397,8 @@ def List<IconSetting> getIconSettings() {
 
     def list = new ArrayList<>()
 //    println "getIconSettings"
-    BufferedReader br = new BufferedReader(new FileReader(new File(Src.ICON_PROPS)))
+//    println("My actual dir=" + projectDir)
+    BufferedReader br = new BufferedReader(new FileReader(new File(projectDir.absolutePath,Src.ICON_PROPS)))
     String line
 
     //There is no do/while in Gradle, so take a for instead
