@@ -58,7 +58,8 @@ task generate() {
 /** Generates a task for every icon, defined in icon.properties. */
 iconSettings.each {
 
-    String taskName = "task_$it.icon"
+    String taskName = "task_" + it.module + "_" + it.flavor + "_" + it.icon
+
     IconSetting is = it
 
     task "$taskName" {
