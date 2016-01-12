@@ -324,36 +324,26 @@ def reportUnusedSources() {
                     used = true
             }
             if (!used)
-                println "INFO unused "+ Src.SRC + file.name
+                println "INFO unused " + Src.SRC + file.name
         }
     }
 
 }
 
+//            runExec(buildOutputFile(myIconSetting,'drawable-mdpi'), file, heightM)
 /** Stupid method to execute Inkscape command line */
 def runExec(String destPath, String srcFile, int height) {
     exec {
         //Dont' show outputs in the terminal
         standardOutput = new ByteArrayOutputStream()
+        getMyPropertyValue()
         executable getMyPropertyValue(Keys.INKSCAPE_PATH)
         args "-z",
-                "-e=" + destPath,
-                "-h=" + height,
-                "-f=" + Src.SRC + srcFile
+                "--export-png=" + destPath,
+                "--export-height=" + height,
+                "--file=" + Src.SRC + srcFile
     }
 }
-//def runExec(String destPath, String srcFile, int height) {
-//    exec {
-//        //Dont' show outputs in the terminal
-//        standardOutput = new ByteArrayOutputStream()
-//        executable getMyPropertyValue(Keys.INKSCAPE_PATH)
-//        args "-z",
-//                "--export-png=" + destPath,
-//                "--export-height=" + height,
-//                "--file=" + Src.SRC + srcFile
-//    }
-//}
-
 
 def printIconSettings() {
     println ""
@@ -383,7 +373,7 @@ def Properties getMyProperties() {
     def props = new Properties()
     def ret = new Properties()
 
-    String path = new File(projectDir,Src.MY_PROPS).absolutePath
+    String path = new File(projectDir, Src.MY_PROPS).absolutePath
     props.load(new FileInputStream(path))
     props.each { key, val ->
         if (!key.startsWith("//")) {
@@ -399,7 +389,7 @@ def List<IconSetting> getIconSettings() {
     def list = new ArrayList<>()
 //    println "getIconSettings"
 //    println("My actual dir=" + projectDir)
-    BufferedReader br = new BufferedReader(new FileReader(new File(projectDir.absolutePath,Src.ICON_PROPS)))
+    BufferedReader br = new BufferedReader(new FileReader(new File(projectDir.absolutePath, Src.ICON_PROPS)))
     String line
 
     //There is no do/while in Gradle, so take a for instead
